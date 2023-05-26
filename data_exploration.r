@@ -6,6 +6,6 @@ lapply(libraries, library, character.only = TRUE)
 setwd(dirname(rstudioapi::getSourceEditorContext()$path))
 data <- read.csv("data.csv", sep = ";")
 
-numerical <- data[, (5):ncol(data)]
+numerical <- data[, (125):ncol(data)]
 summary(numerical)
 windows();pairs(numerical)
