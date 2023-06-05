@@ -35,7 +35,6 @@ set.seed(42)
 # set wd and load data
 setwd(dirname(rstudioapi::getSourceEditorContext()$path))
 data <- read.csv("data.csv", sep = ";")
-
 # remove trailing whitespace in rows
 data$Production_system <- trimws(data$Production_system)
 
@@ -45,12 +44,12 @@ on_meat = data[data$Scan_type == "OM", ]
 numerical <- on_meat[, (5):ncol(on_meat)]
 
 
-# Convert to factor
+# Convert to factor Change column name to production_system or Freshness
 on_meat$Production_system <- as.factor(on_meat$Production_system)
  
 # split the data
 data_splits <- create_train_test_val(on_meat, "Production_system", 0.7, 0.5)
-# train_data <- data_splits$train
+train_data <- data_splits$train
 test_data <- data_splits$test
 val_data <- data_splits$val
 
@@ -60,7 +59,8 @@ predictions <- predict(model, newdata = val_data)
 
 # Create the confusion matrix
 confusion <- confusionMatrix(predictions, val_data$Production_system)
-normalized_confusion_mat <- t(t(confusion_mat) / colSums(confusion_mat))
+
+normalized_confusion_mat <- t(t(confusion$table) / colSums(confusion$table))
 
 # Create a heatmap of the normalized confusion matrix
 windows()
