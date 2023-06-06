@@ -6,7 +6,8 @@ install.packages("rstudioapi")
 install.packages("randomForest")
 install.packages("caret")
 install.packages("gplots")
-libraries <- c("rstudioapi", "Hmisc", "ggplot2", "tidyverse", "randomForest", "caret", "gplots")
+install.packages("pls")
+libraries <- c("rstudioapi", "Hmisc", "ggplot2", "tidyverse", "randomForest", "caret", "gplots", "pls")
 lapply(libraries, library, character.only = TRUE)
 
 
@@ -38,23 +39,29 @@ data <- read.csv("data.csv", sep = ";")
 # remove trailing whitespace in rows
 data$Production_system <- trimws(data$Production_system)
 
-# extract numerical data
-numerical <- data[, (5):ncol(data)]
-on_meat = data[data$Scan_type == "OM", ]
-numerical <- on_meat[, (5):ncol(on_meat)]
+# split scan type
+df_on_meat = data[data$Scan_type == "OM", ]
+df_through_bottom = data[data$Scan_type == "TB", ]
+df_trough_foil = data[data$Scan_type == "TP", ]
+data = data[, c(-1, -3)]
+
+# production_system
+data = data[, c(-2)]
 
 
 # Convert to factor Change column name to production_system or Freshness
-on_meat$Production_system <- as.factor(on_meat$Production_system)
+data$Production_system <- as.factor(data$Production_system)
  
 # split the data
-data_splits <- create_train_test_val(on_meat, "Production_system", 0.7, 0.5)
+data_splits <- create_train_test_val(data, "Production_system", 0.7, 0.5)
 train_data <- data_splits$train
 test_data <- data_splits$test
 val_data <- data_splits$val
 
 # Train and predict
 model <- randomForest(Production_system ~ ., data = train_data, ntree = 300)
+
+
 predictions <- predict(model, newdata = val_data)
 
 # Create the confusion matrix
@@ -79,3 +86,4 @@ heatmap.2(normalized_confusion_mat,
           cexCol = 1,
           cexRow = 1)
 round(confusion$overall, digits = 2)
+
