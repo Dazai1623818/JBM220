@@ -40,9 +40,7 @@ data <- read.csv("data.csv", sep = ";")
 data$Production_system <- trimws(data$Production_system)
 
 # extract numerical data
-# numerical <- data[, (5):ncol(data)]
 on_meat <- data[data$Scan_type == "OM", ]
-# numerical <- on_meat[, (5): ncol(on_meat)]
 
 # Convert to factor Change column name to production_system or Freshness
 on_meat$Production_system <- as.numeric(factor(on_meat$Production_system))
@@ -55,10 +53,15 @@ data_splits <- sample(c(TRUE, FALSE), nrow(on_meat), replace = TRUE, prob = c(0.
 train_data <- on_meat[data_splits, ]
 test_data <- on_meat[!data_splits, ]
 
-cross_val <- function(data, k) {
+cross_val <- function(data, k, col_name) {
     acc <- 0
     f1 <- 0
-    class_labels <- c(1, 2, 3, 4, 5, 6, 7, 8)
+    if (col_name == "Production_system") {
+        a <- 8
+    } else if (col_name == "Freshness") {
+        a <- 2
+    }    
+    class_labels <- c(1: a)
     conf_mat <- table(Actual = class_labels, Predicted = rev(class_labels))
     flds <- createFolds(as.integer(rownames(train_data)), k = k, list = TRUE, returnTrain = FALSE)
     x_columns <- colnames(train_data)
@@ -68,24 +71,21 @@ cross_val <- function(data, k) {
         val_data <- data[flds[[i]], ]
         train_x <- as.matrix(other_data[colnames(other_data) %in% x_columns])
         val_x <- as.matrix(val_data[colnames(val_data) %in% x_columns])
-        train_y <- as.matrix(other_data$Production_system)
-        val_y <- as.matrix(val_data$Production_system)     
+        train_y <- as.matrix(other_data[col_name])
+        val_y <- as.matrix(val_data[col_name])     
         train_matrix <- xgb.DMatrix(data = train_x, label = train_y)
         val_matrix <- xgb.DMatrix(data = val_x, label = val_y)        
-        xgboost_model <- xgb.train(data = train_matrix, nrounds = 10, objective = "multi:softmax", num_class = 9)
-        pred <- factor(predict(xgboost_model, newdata = val_matrix), levels = 1:8)
-        val_y <- factor(val_y, levels = 1:8)
-        # print(dim(val_matrix))
-        # print(dim(train_matrix))
-        # print(as.factor(val_y), levels = 1:8)
-        # print(pred)
-        # print(confusionMatrix(pred, val_y)$table)
-        # print(conf_mat)
+        xgboost_model <- xgb.train(data = train_matrix, nrounds = 10, objective = "multi:softmax", num_class = a + 1)
+        pred <- factor(predict(xgboost_model, newdata = val_matrix), levels = 1: a)
+        val_y <- factor(val_y, levels = 1: a)
         result <- confusionMatrix(pred, val_y)
         acc <- acc + unname(result$overall["Accuracy"])
-        f1 <- f1 + mean(result$byClass[, "F1"], na.rm = TRUE)
+        if (col_name == "Production_system") {
+            f1 <- f1 + unname(result$byClass[, "F1"])
+        } else if (col_name == "Freshness") {
+            f1 <- f1 + mean(result$byClass["F1"], na.rm = TRUE)
+        }   
         conf_mat <- conf_mat + result$table
-        # print(F1_Score(y_true = val_y, y_pred = round(pred)))
         print("Iteration done")
     }
     mean_acc <- acc / k
@@ -98,4 +98,4 @@ cross_val <- function(data, k) {
     print(conf_mat)
 }
 
-cross_val(train_data, 10)
+cross_val(train_data, 10, "Freshness")
