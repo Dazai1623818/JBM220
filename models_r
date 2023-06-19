@@ -1,3 +1,9 @@
+# In the excel file, the order of items in confusion matrix is showing items in columns first
+# |
+# |
+# \/
+# And then go to the column next to the current one
+
 # install and load libraries
 # install.packages("ggplot2")
 # install.packages("Hmisc")
@@ -171,7 +177,6 @@ cross_val_training <- function(scan_type) {
 
     y_lst <- c("Production_system", "Freshness")
     model_lst <- c("xgboost", "random_forest", "knn", "svm", "logistic_regression", "plsda")
-    model_lst <- c("logistic_regression")
 
     for (y in y_lst){
         for (model in model_lst) {
