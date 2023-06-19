@@ -11,6 +11,10 @@ install.packages('plsgenomics')
 libraries <- c("rstudioapi", "Hmisc", "ggplot2", "tidyverse", "randomForest", "caret", "gplots", "mltools", "plsgenomics")
 lapply(libraries, library, character.only = TRUE)
 
+a = 1
+b = 2
+c = 3
+print(c(a, b, c))
 
 # Define functions
 create_train_test_val <- function(data, target_variable, train_prop, test_prop) {

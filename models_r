@@ -4,32 +4,17 @@
 # install.packages("tidyverse")
 # install.packages("rstudioapi")
 # install.packages("xgboost")
+# install.packages("randomForest")
 # install.packages("caret")
 # install.packages("gplots")
 # install.packages("MLmetrics")
-libraries <- c("rstudioapi", "Hmisc", "ggplot2", "tidyverse", "xgboost", "caret", "gplots", "MLmetrics")
+# install.packages('plsgenomics')
+install.packages("readxl")
+install.packages("writexl")
+libraries <- c("rstudioapi", "Hmisc", "ggplot2", "tidyverse", "randomForest", "xgboost", "plsgenomics", "caret", "readxl", "writexl")
 lapply(libraries, library, character.only = TRUE)
 
-
-# Define functions
-# create_train_test_val <- function(data, target_variable, train_prop, test_prop) {
-#   # Create the train dataset
-#   train_idx <- createDataPartition(data[[target_variable]], p = train_prop, list = FALSE)
-#   train_data <- data[train_idx, ]
-  
-#   # Create the remaining dataset
-#   remaining_data <- data[-train_idx, ]
-  
-#   # Create the test dataset
-#   test_idx <- createDataPartition(remaining_data[[target_variable]], p = test_prop, list = FALSE)
-#   test_data <- remaining_data[test_idx, ]
-  
-#   # Create the validation dataset
-#   val_data <- remaining_data[-test_idx, ]
-  
-#   # Return the train, test, and validation datasets
-#   return(list(train = train_data, test = test_data, val = val_data))
-# }
+# Scan type: "OM", "TB", "TP"
 
 set.seed(42)
 
@@ -39,21 +24,11 @@ data <- read.csv("data.csv", sep = ";")
 # remove trailing whitespace in rows
 data$Production_system <- trimws(data$Production_system)
 
-# extract numerical data
-on_meat <- data[data$Scan_type == "OM", ]
+# Create empty dataframe
+df_result <- data.frame(matrix(, nrow = 0, ncol = 6))
+names(df_result) <- c("Scan_Type", "Y_Feature", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
 
-# Convert to factor Change column name to production_system or Freshness
-on_meat$Production_system <- as.numeric(factor(on_meat$Production_system))
-on_meat$Freshness <- as.numeric(factor(on_meat$Freshness))
-
-on_meat <- on_meat[complete.cases(on_meat$Production_system, on_meat$Freshness), ]
- 
-# split the data
-data_splits <- sample(c(TRUE, FALSE), nrow(on_meat), replace = TRUE, prob = c(0.7, 0.3))
-train_data <- on_meat[data_splits, ]
-test_data <- on_meat[!data_splits, ]
-
-cross_val <- function(data, k, col_name) {
+cross_val <- function(scan_type, data, col_name, model_type, k = 10) {
     acc <- 0
     f1 <- 0
     if (col_name == "Production_system") {
@@ -63,39 +38,239 @@ cross_val <- function(data, k, col_name) {
     }    
     class_labels <- c(1: a)
     conf_mat <- table(Actual = class_labels, Predicted = rev(class_labels))
-    flds <- createFolds(as.integer(rownames(train_data)), k = k, list = TRUE, returnTrain = FALSE)
-    x_columns <- colnames(train_data)
+    flds <- createFolds(as.integer(rownames(data)), k = k, list = TRUE, returnTrain = FALSE)
+    x_columns <- colnames(data)
     x_columns <- x_columns[!x_columns %in% c("Sample_number", "Scan_type", "Freshness", "Production_system")]
     for (i in 1: k) {
         other_data <- data[-flds[[i]], ]
         val_data <- data[flds[[i]], ]
-        train_x <- as.matrix(other_data[colnames(other_data) %in% x_columns])
-        val_x <- as.matrix(val_data[colnames(val_data) %in% x_columns])
-        train_y <- as.matrix(other_data[col_name])
-        val_y <- as.matrix(val_data[col_name])     
-        train_matrix <- xgb.DMatrix(data = train_x, label = train_y)
-        val_matrix <- xgb.DMatrix(data = val_x, label = val_y)        
-        xgboost_model <- xgb.train(data = train_matrix, nrounds = 10, objective = "multi:softmax", num_class = a + 1)
-        pred <- factor(predict(xgboost_model, newdata = val_matrix), levels = 1: a)
-        val_y <- factor(val_y, levels = 1: a)
+        if (model_type == "xgboost") {
+            train_x <- as.matrix(other_data[colnames(other_data) %in% x_columns])
+            val_x <- as.matrix(val_data[colnames(val_data) %in% x_columns])
+            train_y <- as.matrix(other_data[col_name])
+            val_y <- as.matrix(val_data[col_name])     
+            train_matrix <- xgb.DMatrix(data = train_x, label = train_y)
+            val_matrix <- xgb.DMatrix(data = val_x, label = val_y)        
+            xgboost_model <- xgb.train(data = train_matrix, nrounds = 10, objective = "multi:softmax", num_class = a + 1)
+            pred <- factor(predict(xgboost_model, newdata = val_matrix), levels = 1: a)
+            val_y <- factor(val_y, levels = 1: a)
+        } else if (model_type == "random_forest") {
+            if (col_name == "Production_system") {
+                rf_model <- randomForest(Production_system ~ ., data = other_data, ntree = 300, type = "classification")
+            } else if (col_name == "Freshness") {
+                rf_model <- randomForest(Freshness ~ ., data = other_data, ntree = 2, type = "classification")
+            }
+            pred <- factor(as.integer(unname(predict(rf_model, val_data, type = "response"))), levels = 1: a)
+            if (col_name == "Production_system") {
+                val_y <- factor(val_data$Production_system, levels = 1: a)
+            } else if (col_name == "Freshness") {
+                val_y <- factor(val_data$Freshness, levels = 1: a)
+            }
+        } else if (model_type == "plsda") {
+            train_x <- other_data[, colnames(other_data) %in% x_columns]
+            val_x <- val_data[, colnames(val_data) %in% x_columns]
+            train_y <- other_data[, col_name]
+            val_y <- factor(val_data[, col_name], levels = 1: a)         
+            plsda_model <- pls.lda(train_x, train_y, Xtest = val_x, ncomp = 1: 15, nruncv = 100)
+            pred <- factor(plsda_model$predclass, levels = 1: a)
+        }
         result <- confusionMatrix(pred, val_y)
         acc <- acc + unname(result$overall["Accuracy"])
         if (col_name == "Production_system") {
-            f1 <- f1 + unname(result$byClass[, "F1"])
+            f1 <- f1 + mean(unname(result$byClass[, "F1"]), na.rm = TRUE)
         } else if (col_name == "Freshness") {
             f1 <- f1 + mean(result$byClass["F1"], na.rm = TRUE)
-        }   
+        }
         conf_mat <- conf_mat + result$table
         print("Iteration done")
     }
     mean_acc <- acc / k
     mean_f1 <- f1 / k
+    print(c(scan_type, col_name, model_type))
+    print("--------------------")
     print("Accuracy: ")
     print(mean_acc)
     print("F1 Score: ")
     print(mean_f1)
     print("Confusion Matrix: ")
     print(conf_mat)
+    df_result[nrow(df_result) + 1,] = c(scan_type, col_name, model_type, mean_acc, mean_f1, conf_mat)
 }
 
-cross_val(train_data, 10, "Freshness")
+function <- cross_val_training(scan_type) {
+    print(scan_type)
+    # extract numerical data
+    on_meat <- data[data$Scan_type == scan_type, ]
+
+    # Convert to factor Change column name to production_system or Freshness
+    on_meat$Production_system <- as.numeric(factor(on_meat$Production_system))
+    on_meat$Freshness <- as.numeric(factor(on_meat$Freshness))
+
+    on_meat <- on_meat[complete.cases(on_meat$Production_system, on_meat$Freshness), ]
+    
+    # split the data
+    data_splits <- sample(c(TRUE, FALSE), nrow(on_meat), replace = TRUE, prob = c(0.7, 0.3))
+    train_data <- on_meat[data_splits, ]
+    test_data <- on_meat[!data_splits, ]
+
+    # standardize the data
+    columns <- colnames(train_data)
+    columns <- columns[!columns %in% c("Sample_number", "Scan_type", "Freshness", "Production_system")]
+    train_data_subset <- train_data[, columns]
+    train_data_subset <- scale(train_data_subset)
+    train_data[, columns] <- train_data_subset
+
+    # Remove the outliers (Any standardized values larger than 3)
+    idx <- which(rowSums(train_data_subset > 3) == 0)
+    train_data <- train_data[idx, ]
+
+    # Apply the mean and standard deviation from the training dataset to the testing dataset
+    train_mean <- apply(train_data_subset, 2, mean)
+    train_sd <- apply(train_data_subset, 2, sd)
+    test_data_subset <- test_data[, columns]
+    test_data_subset <- as.data.frame(scale(test_data_subset, center = train_mean, scale = train_sd))
+    test_data[, columns] <- test_data_subset
+
+    y_lst <- c("Freshness", "Production_system")
+    model_lst <- c("xgboost", "random_forest", "plsda")
+
+    for (y in y_lst){
+        for (model in model_lst) {
+            cross_val(scan_type, train_data, y, model)
+        }
+    }
+    print("------------------------------------------------------------")
+}
+
+scan_type_lst <- c("OM", "TB", "TP")
+
+for (scan_type in scan_type_lst) {
+    cross_val_training(scan_type)
+}
+write_xlsx(df_result, "model_result.xlsx")
+
+# Without normalization:
+# ------------------------------------------------------------
+
+# [1] "Freshness", "OM", "random_forest"
+# [1] "--------------------"
+# [1] "Accuracy: "
+# [1] 0.6212047
+# [1] "F1 Score: "
+# [1] 0.7112739
+# [1] "Confusion Matrix: "
+#       Predicted
+# Actual   1   2
+#      1 472 301
+#      2  84 152
+
+# [1] "Production_system", "OM", "random_forest"
+# [1] "--------------------"
+# [1] "Accuracy: "
+# [1] 0.2222264
+# [1] "F1 Score: "
+# [1] 0.2802838
+# [1] "Confusion Matrix: "
+#       Predicted
+# Actual   1   2   3   4   5   6   7   8
+#      1  26   1   0   0   0   0   0   1
+#      2  51  61   4  21   8   0   6   0
+#      3  26  46  14  50   4   1  22   0
+#      4  18  13  66  43  57   5  38   8
+#      5   4   3  16   7  32 185  37  34
+#      6   0   0   2   6   1  60  12  69
+#      7   0   1   0   3   0   1   0   5
+#      8   1   0   0   0   0   0   0   0
+
+# [1] "Freshness", "OM", "xgboost"
+# [1] "--------------------"
+# [1] "Accuracy: "
+# [1] 0.7077955
+# [1] "F1 Score: "
+# [1] 0.7515386
+# [1] "Confusion Matrix: "
+#       Predicted
+# Actual   1   2
+#      1 475 185
+#      2 127 276
+
+# [1] "Production_system", "OM", "xgboost"
+# [1] "--------------------"
+# [1] "Accuracy: "
+# [1] 0.401516
+# [1] "F1 Score: "
+# [1] 0.3446525
+# [1] "Confusion Matrix: "
+#       Predicted
+# Actual   1   2   3   4   5   6   7   8
+#      1  35  14   3  14  14   5  13   4
+#      2  29  68  16  10  14  14  10  15
+#      3   4   8  11   3  12   7   7  17
+#      4  12   4   9  42   6   7  24  10
+#      5  10   7  18  11  22   6   2  14
+#      6  22  10  13  19   9 186  11  23
+#      7  11   9  14  17  10   6  38  10
+#      8   3   5  18  14  15  21  10  24
+
+# With normalization:
+# ------------------------------------------------------------
+
+# [1] "Freshness", "OM", "random_forest"
+# [1] "--------------------"
+# [1] "Accuracy: "
+# [1] 0.6356828
+# [1] "F1 Score: "
+# [1] 0.7249438
+# [1] "Confusion Matrix: "
+#       Predicted
+# Actual   1   2
+#      1 497 296
+#      2  81 156
+
+# [1] "Production_system", "OM", "random_forest"
+# [1] "--------------------"
+# [1] "Accuracy: "
+# [1] 0.2028235
+# [1] "F1 Score: "
+# [1] 0.2519789
+# [1] "Confusion Matrix: "
+#       Predicted
+# Actual   1   2   3   4   5   6   7   8
+#      1  21   3   0   0   0   0   0   1
+#      2  59  58   3  14   6   0   7   0
+#      3  22  41  15  51   3   1  18   0
+#      4  14  18  66  49  68   5  35   8
+#      5   5   3  14   5  22 197  42  33
+#      6   0   0   3   5   0  47  11  65
+#      7   0   1   0   3   0   1   0  10
+#      8   1   0   0   0   0   0   0   0
+
+# [1] "Freshness", "OM", "xgboost"
+# [1] "--------------------"
+# [1] "Accuracy: "
+# [1] 0.7113586
+# [1] "F1 Score: "
+# [1] 0.7561023
+# [1] "Confusion Matrix: "
+#       Predicted
+# Actual   1   2
+#      1 472 182
+#      2 122 272
+
+# [1] "Production_system", "OM", "xgboost"
+# [1] "--------------------"
+# [1] "Accuracy: "
+# [1] 0.4101527
+# [1] "F1 Score: "
+# [1] 0.3642463
+# [1] "Confusion Matrix: "
+#       Predicted
+# Actual   1   2   3   4   5   6   7   8
+#      1  33   9   6  14   8   8  12   5
+#      2  20  70  15  14  16  14   8  18
+#      3   8   8   8   9  22   6   6  16
+#      4  15   6  10  36   7   8  18   9
+#      5   8   4  13   7  18   6   3  12
+#      6  20  10  13  20   7 193  10  19
+#      7  10  10  13  15   6   4  43  10
+#      8   8   7  23  12  15  12  13  28
