@@ -97,7 +97,7 @@ cross_val <- function(scan_type, data, col_name, model_type, k = 10) {
     df_result[nrow(df_result) + 1,] = c(scan_type, col_name, model_type, mean_acc, mean_f1, conf_mat)
 }
 
-function <- cross_val_training(scan_type) {
+cross_val_training <- function(scan_type) {
     print(scan_type)
     # extract numerical data
     on_meat <- data[data$Scan_type == scan_type, ]
