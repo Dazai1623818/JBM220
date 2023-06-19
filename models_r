@@ -9,9 +9,8 @@
 # install.packages("gplots")
 # install.packages("MLmetrics")
 # install.packages('plsgenomics')
-install.packages("readxl")
-install.packages("writexl")
-libraries <- c("rstudioapi", "Hmisc", "ggplot2", "tidyverse", "randomForest", "xgboost", "plsgenomics", "caret", "readxl", "writexl")
+# install.packages("writexl")
+libraries <- c("rstudioapi", "Hmisc", "ggplot2", "tidyverse", "randomForest", "xgboost", "plsgenomics", "caret", "writexl")
 lapply(libraries, library, character.only = TRUE)
 
 # Scan type: "OM", "TB", "TP"
@@ -24,11 +23,9 @@ data <- read.csv("data.csv", sep = ";")
 # remove trailing whitespace in rows
 data$Production_system <- trimws(data$Production_system)
 
-# Create empty dataframe
-df_result <- data.frame(matrix(, nrow = 0, ncol = 6))
-names(df_result) <- c("Scan_Type", "Y_Feature", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
-
 cross_val <- function(scan_type, data, col_name, model_type, k = 10) {
+    df_a <- data.frame(matrix(, nrow = 0, ncol = 6))
+    names(df_a) <- c("Scan_Type", "Y_Feature", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
     acc <- 0
     f1 <- 0
     if (col_name == "Production_system") {
@@ -94,11 +91,14 @@ cross_val <- function(scan_type, data, col_name, model_type, k = 10) {
     print(mean_f1)
     print("Confusion Matrix: ")
     print(conf_mat)
-    df_result[nrow(df_result) + 1,] = c(scan_type, col_name, model_type, mean_acc, mean_f1, conf_mat)
+    df_a[nrow(df_a) + 1,] = c(scan_type, col_name, model_type, mean_acc, mean_f1, conf_mat)
+    return(df_a)
 }
 
 cross_val_training <- function(scan_type) {
     print(scan_type)
+    df_b <- data.frame(matrix(, nrow = 0, ncol = 6))
+    names(df_b) <- c("Scan_Type", "Y_Feature", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
     # extract numerical data
     on_meat <- data[data$Scan_type == scan_type, ]
 
@@ -136,16 +136,22 @@ cross_val_training <- function(scan_type) {
 
     for (y in y_lst){
         for (model in model_lst) {
-            cross_val(scan_type, train_data, y, model)
+            df_c <- cross_val(scan_type, train_data, y, model)
+            df_b <- rbind(df_b, df_c)
         }
     }
     print("------------------------------------------------------------")
+    return(df_b)
 }
 
 scan_type_lst <- c("OM", "TB", "TP")
 
+# Create empty dataframe
+df_result <- data.frame(matrix(, nrow = 0, ncol = 6))
+names(df_result) <- c("Scan_Type", "Y_Feature", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
+
 for (scan_type in scan_type_lst) {
-    cross_val_training(scan_type)
+    df_result <- rbind(df_result, cross_val_training(scan_type))
 }
 write_xlsx(df_result, "model_result.xlsx")
 
