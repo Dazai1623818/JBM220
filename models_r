@@ -31,6 +31,8 @@ data <- read.csv("data.csv", sep = ";")
 # remove trailing whitespace in rows
 data$Production_system <- trimws(data$Production_system)
 
+data <- data %>% drop_na()
+
 cross_val <- function(scan_type, data, col_name, model_type, k = 10) {
     df_a <- data.frame(matrix(, nrow = 0, ncol = 6))
     names(df_a) <- c("Scan_Type", "Y_Feature", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
@@ -157,20 +159,24 @@ cross_val_training <- function(scan_type) {
     train_data <- on_meat[data_splits, ]
     test_data <- on_meat[!data_splits, ]
 
-    # standardize the data
+    # remove the outliers in training dataset (any absolute standardized values larger than 3)
     columns <- colnames(train_data)
     columns <- columns[!columns %in% c("Sample_number", "Scan_type", "Freshness", "Production_system")]
-    train_data_subset <- train_data[, columns]
-    train_data_subset <- scale(train_data_subset)
-    train_data[, columns] <- train_data_subset
-
-    # Remove the outliers (Any standardized values larger than 3)
-    idx <- which(rowSums(train_data_subset > 3) == 0)
+    train_data_org_subset <- train_data[, columns]
+    train_data_org_subset <- scale(train_data_org_subset)
+    idx <- which(rowSums(abs(train_data_org_subset) > 3) == 0)
+    print("Percentage of outliers in training dataset: ")
+    print((dim(train_data)[1] - length(idx)) / dim(train_data)[1] * 100)
     train_data <- train_data[idx, ]
 
-    # Apply the mean and standard deviation from the training dataset to the testing dataset
-    train_mean <- apply(train_data_subset, 2, mean)
-    train_sd <- apply(train_data_subset, 2, sd)
+    # standardize the data
+    train_data_new_subset <- train_data[, columns]
+    train_data_new_subset <- scale(train_data_new_subset)
+    train_data[, columns] <- train_data_new_subset
+
+    # apply the mean and sd from the training dataset to standardize the testing dataset
+    train_mean <- apply(train_data_new_subset, 2, mean)
+    train_sd <- apply(train_data_new_subset, 2, sd)
     test_data_subset <- test_data[, columns]
     test_data_subset <- as.data.frame(scale(test_data_subset, center = train_mean, scale = train_sd))
     test_data[, columns] <- test_data_subset
