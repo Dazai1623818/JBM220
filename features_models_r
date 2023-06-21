@@ -18,10 +18,9 @@
 # install.packages("gplots")
 # install.packages("MLmetrics")
 # install.packages('plsgenomics')
-# install.packages("RaSEn", repos = "http://cran.us.r-project.org")
 # install.packages("writexl")
 
-libraries <- c("rstudioapi", "Hmisc", "ggplot2", "tidyverse", "randomForest", "xgboost", "VGAM", "class", "e1071", "plsgenomics", "RaSEn", "caret", "writexl")
+libraries <- c("rstudioapi", "Hmisc", "ggplot2", "tidyverse", "randomForest", "xgboost", "VGAM", "class", "e1071", "plsgenomics", "caret", "writexl")
 lapply(libraries, library, character.only = TRUE)
 
 set.seed(42)
@@ -34,21 +33,25 @@ data$Production_system <- trimws(data$Production_system)
 
 data <- data %>% drop_na()
 
-cross_val <- function(scan_type, data, col_name, model_type, k = 10) {
-    df_a <- data.frame(matrix(, nrow = 0, ncol = 6))
-    names(df_a) <- c("Scan_Type", "Y_Feature", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
+print(dim(data))
+
+cross_val <- function(scan_type, data, col_name, model_type, importance_1, importance_2, important_nr, k = 10) {
+    df_a <- data.frame(matrix(, nrow = 0, ncol = 7))
+    names(df_a) <- c("Scan_Type", "Y_Feature", "Features_Nr", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
     acc <- 0
     f1 <- 0
     if (col_name == "Production_system") {
         a <- 8
+        x_columns <- importance_2
     } else if (col_name == "Freshness") {
         a <- 2
-    }    
+        x_columns <- importance_1
+    }
     class_labels <- c(1: a)
     conf_mat <- table(Actual = class_labels, Predicted = rev(class_labels))
     flds <- createFolds(as.integer(rownames(data)), k = k, list = TRUE, returnTrain = FALSE)
-    x_columns <- colnames(data)
-    x_columns <- x_columns[!x_columns %in% c("Sample_number", "Scan_type", "Freshness", "Production_system")]
+    # x_columns <- colnames(data)
+    # x_columns <- x_columns[!x_columns %in% c("Sample_number", "Scan_type", "Freshness", "Production_system")]
 
     for (i in 1: k) {
         other_data <- data[-flds[[i]], ]
@@ -80,7 +83,7 @@ cross_val <- function(scan_type, data, col_name, model_type, k = 10) {
         } else if (model_type == "knn") {
             train_x <- other_data[, colnames(other_data) %in% x_columns]
             val_x <- val_data[, colnames(val_data) %in% x_columns]
-            train_y <- other_data[, col_name]
+            train_y <- factor(other_data[, col_name], levels = 1: a)
             val_y <- factor(val_data[, col_name], levels = 1: a)
             knn_model <- knn(train = train_x, test = val_x, cl = train_y, k = 9)        
             pred <- factor(knn_model, levels = 1: a)
@@ -113,17 +116,14 @@ cross_val <- function(scan_type, data, col_name, model_type, k = 10) {
             train_x <- other_data[, colnames(other_data) %in% x_columns]
             val_x <- val_data[, colnames(val_data) %in% x_columns]
             train_y <- other_data[, col_name]
-            val_y <- factor(val_data[, col_name], levels = 1: a)         
-            plsda_model <- pls.lda(train_x, train_y, Xtest = val_x, ncomp = 1: 15, nruncv = 100)
-            pred <- factor(plsda_model$predclass, levels = 1: a)
-        } else if (model_type == "rsde") {
-            train_x <- other_data[, colnames(other_data) %in% x_columns]
-            val_x <- val_data[, colnames(val_data) %in% x_columns]
-            train_y <- factor(other_data[, col_name], levels = 1: a)
             val_y <- factor(val_data[, col_name], levels = 1: a)
-            print("Done")             
-            rsde_model <- Rase(train_x, train_y, B1 = 20, B2 = 20, iteration = 0, base = "knn", criterion = "auc")
-            pred <- factor(as.integer(unname(predict(rsde_model, val_x))), levels = 1: a)
+            if (important_nr < 15) {
+                ncomp <- important_nr
+            } else {
+                ncomp <- 15
+            }
+            plsda_model <- pls.lda(train_x, train_y, Xtest = val_x, ncomp = 1: ncomp, nruncv = 100)
+            pred <- factor(plsda_model$predclass, levels = 1: a)
         }
 
         result <- confusionMatrix(pred, val_y)
@@ -138,7 +138,7 @@ cross_val <- function(scan_type, data, col_name, model_type, k = 10) {
     }
     mean_acc <- acc / k
     mean_f1 <- f1 / k
-    print(c(scan_type, col_name, model_type))
+    print(c(scan_type, col_name, model_type, important_nr))
     print("--------------------")
     print("Accuracy: ")
     print(mean_acc)
@@ -146,14 +146,14 @@ cross_val <- function(scan_type, data, col_name, model_type, k = 10) {
     print(mean_f1)
     print("Confusion Matrix: ")
     print(conf_mat)
-    df_a[nrow(df_a) + 1,] = c(scan_type, col_name, model_type, mean_acc, mean_f1, paste(as.vector(conf_mat), collapse = " "))
+    df_a[nrow(df_a) + 1,] = c(scan_type, col_name, important_nr, model_type, mean_acc, mean_f1, paste(as.vector(conf_mat), collapse = " "))
     return(df_a)
 }
 
-cross_val_training <- function(scan_type) {
+cross_val_training <- function(scan_type, important_nr) {
     print(scan_type)
-    df_b <- data.frame(matrix(, nrow = 0, ncol = 6))
-    names(df_b) <- c("Scan_Type", "Y_Feature", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
+    df_b <- data.frame(matrix(, nrow = 0, ncol = 7))
+    names(df_b) <- c("Scan_Type", "Y_Feature", "Features_Nr", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
     # extract numerical data
     on_meat <- data[data$Scan_type == scan_type, ]
 
@@ -190,14 +190,44 @@ cross_val_training <- function(scan_type) {
     test_data_subset <- as.data.frame(scale(test_data_subset, center = train_mean, scale = train_sd))
     test_data[, columns] <- test_data_subset
 
-    # y_lst <- c("Production_system", "Freshness")
-    # model_lst <- c("xgboost", "random_forest", "knn", "svm", "logistic_regression", "plsda")
-    y_lst <- c("Freshness")
-    model_lst <- c("rsde")
+    # find the important features using xgboost
+    temp_train_x <- as.matrix(train_data[colnames(train_data) %in% columns])
+    temp_train_y1 <- as.matrix(train_data["Freshness"])
+    temp_train_y2 <- as.matrix(train_data["Production_system"]) 
+    train_matrix_y1 <- xgb.DMatrix(data = temp_train_x, label = temp_train_y1)
+    train_matrix_y2 <- xgb.DMatrix(data = temp_train_x, label = temp_train_y2)    
+    xgboost_model_1 <- xgb.train(data = train_matrix_y1, nrounds = 10, objective = "multi:softmax", num_class = 2 + 1)
+    xgboost_model_2 <- xgb.train(data = train_matrix_y2, nrounds = 10, objective = "multi:softmax", num_class = 8 + 1)
+    importance_1 <- xgb.importance(model = xgboost_model_1)
+    importance_2 <- xgb.importance(model = xgboost_model_2)
+
+    importance_1 <- importance_1[order(importance_1$Gain, decreasing = TRUE), ]
+    importance_2 <- importance_2[order(importance_2$Gain, decreasing = TRUE), ]
+
+    importance_1 <- c(importance_1$Feature[1: important_nr])
+    importance_2 <- c(importance_2$Feature[1: important_nr])
+
+    print(importance_1)
+
+    # print(importance_1)
+    # print(importance_2)
+
+    # windows();barplot(importance_1$Gain, names.arg = importance_1$Feature, horiz = TRUE)
+    # windows();barplot(importance_2$Gain, names.arg = importance_2$Feature, horiz = TRUE)
+
+    # windows();ggplot(importance_2, aes(x = reorder(Feature, FeatureScore), y = FeatureScore)) + 
+    # geom_bar(stat = "identity", fill = "steelblue") +
+    # labs(x = "Feature", y = "Importance Score") +
+    # ggtitle("Feature Importance for Freshness") +
+    # theme(axis.text.x = element_text(angle = 45, hjust = 1))    
+
+
+    y_lst <- c("Production_system", "Freshness")
+    model_lst <- c("xgboost", "random_forest", "knn", "svm", "logistic_regression", "plsda")
 
     for (y in y_lst){
         for (model in model_lst) {
-            df_c <- cross_val(scan_type, train_data, y, model)
+            df_c <- cross_val(scan_type, train_data, y, model, importance_1, importance_2, important_nr)
             df_b <- rbind(df_b, df_c)
         }
     }
@@ -208,11 +238,13 @@ cross_val_training <- function(scan_type) {
 scan_type_lst <- c("OM", "TB", "TP")
 
 # Create empty dataframe
-df_result <- data.frame(matrix(, nrow = 0, ncol = 6))
-names(df_result) <- c("Scan_Type", "Y_Feature", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
+df_result <- data.frame(matrix(, nrow = 0, ncol = 7))
+names(df_result) <- c("Scan_Type", "Y_Feature", "Features_Nr", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
 
-for (scan_type in scan_type_lst) {
-    df_result <- rbind(df_result, cross_val_training(scan_type))
+for (features_nr in 2: 60) {
+    for (scan_type in scan_type_lst) {
+        df_result <- rbind(df_result, cross_val_training(scan_type, features_nr))
+    }
 }
-# write_xlsx(df_result, "model_result.xlsx")
-write_xlsx(df_result, "bruh.xlsx")
+
+write_xlsx(df_result, "features_model_result.xlsx")
