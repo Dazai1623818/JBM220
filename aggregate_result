@@ -1,0 +1,37 @@
+# In the excel file, the order of items in confusion matrix is showing items in columns first
+# |
+# |
+# \/
+# And then go to the column next to the current one
+
+# install and load libraries
+# install.packages("ggplot2")
+# install.packages("Hmisc")
+# install.packages("tidyverse")
+# install.packages("rstudioapi")
+# install.packages("xgboost")
+# install.packages("randomForest")
+# install.packages("VGAM")
+# install.packages("class")
+# install.packages("e1071")
+# install.packages("caret")
+# install.packages("gplots")
+# install.packages("MLmetrics")
+# install.packages('plsgenomics')
+# install.packages("readxl")
+# install.packages("writexl")
+
+libraries <- c("rstudioapi", "Hmisc", "ggplot2", "tidyverse", "randomForest", "xgboost", "VGAM", "class", "e1071", "plsgenomics", "caret", "readxl", "writexl")
+lapply(libraries, library, character.only = TRUE)
+
+set.seed(42)
+
+# set wd and load data
+setwd(dirname(rstudioapi::getSourceEditorContext()$path))
+df <- read_excel("features_model_result.xlsx")
+
+result <- df %>%
+  group_by(Y_Feature, Scan_Type, Model_Used) %>%
+  filter(F1_Score == max(F1_Score))
+
+write_xlsx(result, "best_features.xlsx")
