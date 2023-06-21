@@ -223,7 +223,8 @@ cross_val_training <- function(scan_type, important_nr) {
 
 
     y_lst <- c("Production_system", "Freshness")
-    model_lst <- c("xgboost", "random_forest", "knn", "svm", "logistic_regression", "plsda")
+    # model_lst <- c("xgboost", "random_forest", "knn", "svm", "logistic_regression", "plsda")
+     model_lst <- c("logistic_regression")
 
     for (y in y_lst){
         for (model in model_lst) {
@@ -241,7 +242,7 @@ scan_type_lst <- c("OM", "TB", "TP")
 df_result <- data.frame(matrix(, nrow = 0, ncol = 7))
 names(df_result) <- c("Scan_Type", "Y_Feature", "Features_Nr", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
 
-for (features_nr in 2: 60) {
+for (features_nr in 2: 125) {
     for (scan_type in scan_type_lst) {
         df_result <- rbind(df_result, cross_val_training(scan_type, features_nr))
     }

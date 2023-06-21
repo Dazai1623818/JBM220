@@ -30,21 +30,26 @@ set.seed(42)
 setwd(dirname(rstudioapi::getSourceEditorContext()$path))
 df_1 <- read_excel("model_result_raw.xlsx")
 df_2 <- read_excel("model_result.xlsx")
+df_3 <- read_excel("pca_model_result.xlsx")
 
 names(df_1)[names(df_1) == 'F1_Score'] <- 'Before_Preprocessing'
 names(df_2)[names(df_2) == 'F1_Score'] <- 'After_Preprocessing'
+names(df_3)[names(df_3) == 'F1_Score'] <- 'After_3_PCA'
 
 df_1 <- df_1[, c('Scan_Type', 'Y_Feature', 'Model_Used', 'Before_Preprocessing')]
 df_2 <- df_2[, c('Scan_Type', 'Y_Feature', 'Model_Used', 'After_Preprocessing')]
+df_3 <- df_3[, c('Scan_Type', 'Y_Feature', 'Model_Used', 'After_3_PCA')]
 
 df <- merge(df_1, df_2)
+df <- merge(df, df_3)
 df <- df %>% filter((Model_Used != 'svm') & (Model_Used != 'random_forest'))
 
 df$Before_Preprocessing <- round(as.numeric(df$Before_Preprocessing), digit = 3)
 df$After_Preprocessing <- round(as.numeric(df$After_Preprocessing), digit = 3)
+df$After_3_PCA <- round(as.numeric(df$After_3_PCA), digit = 3)
 
-df_a <- df %>% filter(Y_Feature == 'Freshness') %>% select('Scan_Type', 'Model_Used', 'Before_Preprocessing', 'After_Preprocessing')
-df_b <- df %>% filter(Y_Feature == 'Production_system') %>% select('Scan_Type', 'Model_Used', 'Before_Preprocessing', 'After_Preprocessing')
+df_a <- df %>% filter(Y_Feature == 'Freshness') %>% select('Scan_Type', 'Model_Used', 'Before_Preprocessing', 'After_Preprocessing', 'After_3_PCA')
+df_b <- df %>% filter(Y_Feature == 'Production_system') %>% select('Scan_Type', 'Model_Used', 'Before_Preprocessing', 'After_Preprocessing', 'After_3_PCA')
 
 write_xlsx(df_a, "freshness.xlsx")
 write_xlsx(df_b, "production_system.xlsx")
