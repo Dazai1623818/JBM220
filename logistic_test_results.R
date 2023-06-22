@@ -30,7 +30,7 @@ df_f$F1_Score <- as.numeric(df_f$F1_Score)
 
 y_lst <- c("Production_system", "Freshness")
 scan_type_lst <- c("OM", "TB", "TP")
-features_l <- list()
+features_l <- c()
 
 for (y in y_lst){
     for (type in scan_type_lst) {
@@ -38,14 +38,19 @@ for (y in y_lst){
             filter((Y_Feature == y) & (Scan_Type == type))
         best_param <- df_x$Features_Nr[which.max(df_x$F1_Score)]
         cat(paste("Y Feature:", y, "Scan Type:", type, "Best Parameter:", best_param, "\n"))
-        features_l <- c(features_l, best_param)
+        features_l <- c(features_l, unname(best_param))
     }
 }
+
+data <- read.csv("data.csv", sep = ";")
+data$Production_system <- trimws(data$Production_system)
+data <- data %>% drop_na()
 
 #-------------------------------------------------------------------------------
 # Train the model with optimal features
 
-testing <- function(scan_type, data_1, data_2, col_name, model_type, importance_1, importance_2, important_nr, k = 10) {
+testing <- function(scan_type, data_1, data_2, col_name, model_type, importance_1, importance_2, important_nr) {
+    print("Start")
     df_a <- data.frame(matrix(, nrow = 0, ncol = 7))
     names(df_a) <- c("Scan_Type", "Y_Feature", "Features_Nr", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
     acc <- 0
@@ -62,7 +67,7 @@ testing <- function(scan_type, data_1, data_2, col_name, model_type, importance_
     # flds <- createFolds(as.integer(rownames(data_1)), k = k, list = TRUE, returnTrain = FALSE)
     x_columns <- colnames(data_1)
     x_columns <- x_columns[!x_columns %in% c("Sample_number", "Scan_type", "Freshness", "Production_system")]
-    
+
     # cross-validation
     # for (i in 1: k) {
     #     other_data <- data_1[-flds[[i]], ]
@@ -123,10 +128,13 @@ testing <- function(scan_type, data_1, data_2, col_name, model_type, importance_
 
 testing_training <- function(scan_type, important_nr) {
     print(scan_type)
+    print(important_nr)
     df_b <- data.frame(matrix(, nrow = 0, ncol = 7))
     names(df_b) <- c("Scan_Type", "Y_Feature", "Features_Nr", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
     # extract numerical data
     on_meat <- data[data$Scan_type == scan_type, ]
+
+
 
     # convert to factor Change column name to production_system or Freshness
     on_meat$Production_system <- as.numeric(factor(on_meat$Production_system))
@@ -178,10 +186,7 @@ testing_training <- function(scan_type, important_nr) {
     importance_1 <- c(importance_1$Feature[1: important_nr])
     importance_2 <- c(importance_2$Feature[1: important_nr])
 
-    print(importance_1)  
-
     y_lst <- c("Production_system", "Freshness")
-    model_lst <- c()
 
     for (y in y_lst) {
         df_c <- testing(scan_type, train_data, test_data, y, "logistic_regression", importance_1, importance_2, important_nr)
@@ -191,7 +196,7 @@ testing_training <- function(scan_type, important_nr) {
     return(df_b)
 }
 
-scan_type_lst <- 
+scan_type_lst <- c("OM", "TB", "TP")
 
 # Create empty dataframe
 df_result <- data.frame(matrix(, nrow = 0, ncol = 7))
