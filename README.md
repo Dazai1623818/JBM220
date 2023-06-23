@@ -4,4 +4,4 @@ There are 2 R files that can be run, namely "" and "". It is recommended to run 
 
 For "", it contains all visualizations and results shown in the paper. It can be run in 1-go.
 
-For "", it contains all the feature selections of the logistic regression model. It takes a very long time to run everything, i.e. almost 1 day, so it is not recommended to run this file.
+For "", it contains all the feature selections of the logistic regression model. It takes a very long time to run everything, i.e. almost 12 hours, so it is not recommended to run this file.
