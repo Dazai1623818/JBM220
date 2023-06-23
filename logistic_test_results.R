@@ -30,17 +30,18 @@ df_f$F1_Score <- as.numeric(df_f$F1_Score)
 
 y_lst <- c("Production_system", "Freshness")
 scan_type_lst <- c("OM", "TB", "TP")
-features_l <- c()
+# features_l <- c()
+features_l <- c(50, 60, 57, 56, 53, 56)
 
-for (y in y_lst){
-    for (type in scan_type_lst) {
-        df_x <- df_f %>%
-            filter((Y_Feature == y) & (Scan_Type == type))
-        best_param <- df_x$Features_Nr[which.max(df_x$F1_Score)]
-        cat(paste("Y Feature:", y, "Scan Type:", type, "Best Parameter:", best_param, "\n"))
-        features_l <- c(features_l, unname(best_param))
-    }
-}
+# for (y in y_lst){
+#     for (type in scan_type_lst) {
+#         df_x <- df_f %>%
+#             filter((Y_Feature == y) & (Scan_Type == type))
+#         best_param <- df_x$Features_Nr[which.max(df_x$F1_Score)]
+#         cat(paste("Y Feature:", y, "Scan Type:", type, "Best Parameter:", best_param, "\n"))
+#         features_l <- c(features_l, unname(best_param))
+#     }
+# }
 
 data <- read.csv("data.csv", sep = ";")
 data$Production_system <- trimws(data$Production_system)
@@ -126,7 +127,7 @@ testing <- function(scan_type, data_1, data_2, col_name, model_type, importance_
     return(df_a)
 }
 
-testing_training <- function(scan_type, important_nr) {
+testing_training <- function(scan_type, important_nr, y) {
     print(scan_type)
     print(important_nr)
     df_b <- data.frame(matrix(, nrow = 0, ncol = 7))
@@ -186,12 +187,8 @@ testing_training <- function(scan_type, important_nr) {
     importance_1 <- c(importance_1$Feature[1: important_nr])
     importance_2 <- c(importance_2$Feature[1: important_nr])
 
-    y_lst <- c("Production_system", "Freshness")
-
-    for (y in y_lst) {
-        df_c <- testing(scan_type, train_data, test_data, y, "logistic_regression", importance_1, importance_2, important_nr)
-        df_b <- rbind(df_b, df_c)
-    }
+    df_c <- testing(scan_type, train_data, test_data, y, "logistic_regression", importance_1, importance_2, important_nr)
+    df_b <- rbind(df_b, df_c)
     print("------------------------------------------------------------")
     return(df_b)
 }
@@ -203,8 +200,9 @@ df_result <- data.frame(matrix(, nrow = 0, ncol = 7))
 names(df_result) <- c("Scan_Type", "Y_Feature", "Features_Nr", "Model_Used", "Accuracy", "F1_Score", "Confusion_Matrix")
 
 full_scan_type_lst <- c("OM", "TB", "TP", "OM", "TB", "TP")
+full_column_name <- c("Production_system", "Production_system", "Production_system", "Freshness", "Freshness", "Freshness")
 for (nr in 1: 6) {
-    df_result <- rbind(df_result, testing_training(full_scan_type_lst[nr], features_l[nr]))
+    df_result <- rbind(df_result, testing_training(full_scan_type_lst[nr], features_l[nr], full_column_name[nr]))
 }
 
 write_xlsx(df_result, "testing_model_result.xlsx")
